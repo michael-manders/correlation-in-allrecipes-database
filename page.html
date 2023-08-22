@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Correlations in the AllRecipes Database</title>
+        <script src="functions.js"></script>
+        <script src="new_dataset.js"></script>
+        <script src="ingredients.js"></script>
+        <script src="categories.js"></script>
+        <link rel="stylesheet" href="webpage.css" />
+
+        <script>
+            colors = ["3277FF", "FFFFFF", "FF4131"];
+
+            function getColor(min, max, value) {
+                if (value == "X") return "#000000";
+
+                if (value < 0) {
+                    // calculate color on gradient of colors[0] to colors[1]
+                    var percent = Math.abs(value) / Math.abs(min);
+                    return blendColors(colors[1], colors[0], percent);
+                } else if (value > 0) {
+                    // calculate color on gradient of colors[1] to colors[2]
+                    var percent = value / max;
+                    return blendColors(colors[1], colors[2], percent);
+                } else {
+                    return colors[1];
+                }
+            }
+
+            // Helper functions
+
+            function blendColors(color1, color2, percent) {
+                var r1 = parseInt(color1.substring(0, 2), 16);
+                var g1 = parseInt(color1.substring(2, 4), 16);
+                var b1 = parseInt(color1.substring(4, 6), 16);
+
+                var r2 = parseInt(color2.substring(0, 2), 16);
+                var g2 = parseInt(color2.substring(2, 4), 16);
+                var b2 = parseInt(color2.substring(4, 6), 16);
+
+                var r = Math.round(r1 + (r2 - r1) * percent);
+                var g = Math.round(g1 + (g2 - g1) * percent);
+                var b = Math.round(b1 + (b2 - b1) * percent);
+
+                return (
+                    "#" +
+                    componentToHex(r) +
+                    componentToHex(g) +
+                    componentToHex(b)
+                );
+            }
+
+            function componentToHex(c) {
+                var hex = c.toString(16);
+                return hex.length == 1 ? "0" + hex : hex;
+            }
+        </script>
+
+        <script>
+            // this is where the analysis image is generated
+
+            category = false;
+            showNumbers = false;
+
+            function analyze(ingredients, showNumbers = false) {
+                // remove the old image
+                var old = document.getElementById("image-container").lastChild;
+                if (old != null)
+                    document.getElementById("image-container").removeChild(old);
+
+                //reload functions.js and new_dataset.js
+                var script = document.createElement("script");
+                script.src = "functions.js";
+                document.head.appendChild(script);
+
+                var script = document.createElement("script");
+                script.src = "new_dataset.js";
+                document.head.appendChild(script);
+
+                cat = document.getElementById("categoryIn").value;
+                if (cat == "Enter Category (Optional)" || cat == "")
+                    cat = false;
+
+                colors[0] = document
+                    .getElementById("color1")
+                    .value.substring(1);
+                colors[1] = document
+                    .getElementById("color2")
+                    .value.substring(1);
+                colors[2] = document
+                    .getElementById("color3")
+                    .value.substring(1);
+
+                analysis = makeAnalysis(dataset, ingredients, cat);
+                len = analysis.length;
+
+                // make image that is 100 * len pixels wide and long
+                var canvas = document.createElement("canvas");
+                var ctx = canvas.getContext("2d");
+
+                longestIng = "";
+                for (i of ingredients) {
+                    if (i.length > longestIng.length) longestIng = i;
+                }
+                ctx.font = "60px Helvetica";
+                textWidthL = ctx.measureText(longestIng).width;
+
+                canvas.width = 100 * len + 400 + textWidthL;
+                canvas.height = 100 * len + textWidthL;
+
+                // background color to greu
+                ctx.fillStyle = "#E8E8E8";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                analysisNumbers = [];
+                for (i of analysis) analysisNumbers.push(i.slice(1, len + 1));
+                analysisNumbers = analysisNumbers.slice(0, len - 1);
+
+                for (i = 0; i < len - 1; i++) {
+                    analysisNumbers[i][i] = "X";
+                }
+
+                // find the max value in the analysis
+                max = 0;
+                min = 10000;
+                for (i = 0; i < len - 1; i++) {
+                    for (j = 0; j < len - 1; j++) {
+                        if (analysisNumbers[i][j] > max)
+                            max = analysisNumbers[i][j];
+                        if (analysisNumbers[i][j] < min)
+                            min = analysisNumbers[i][j];
+                    }
+                }
+
+                // for every cell in the analysis, draw a box thats 90x 90px and colored based on the value
+
+                offsetx = textWidthL + 50;
+                offsety = 50;
+                for (i = 0; i < len - 1; i++) {
+                    for (j = 0; j < len - 1; j++) {
+                        ctx.fillStyle = getColor(
+                            min,
+                            max,
+                            analysisNumbers[i][j]
+                        );
+
+                        ctx.fillRect(
+                            i * 100 + offsetx,
+                            j * 100 + offsety,
+                            90,
+                            90
+                        );
+                        if (showNumbers) {
+                            text = parseInt(analysisNumbers[i][j] * 100) / 100;
+                            ctx.fillStyle = "#000000";
+                            ctx.font = "30px Helvetica";
+
+                            textWidth = ctx.measureText(text).width;
+                            ctx.fillText(
+                                text,
+                                i * 100 + 45 - textWidth / 2 + offsetx,
+                                j * 100 + 45 + 10 + offsety
+                            );
+                        }
+                    }
+                }
+
+                // write the text in for the side of the cells
+                for (i = 0; i < len - 1; i++) {
+                    ctx.fillStyle = "#000000";
+                    // 60px bold helvetica
+                    ctx.font = "60px Helvetica";
+
+                    text = analysis[i][0];
+                    textWidth = ctx.measureText(text).width;
+                    // left side
+                    ctx.fillText(
+                        text,
+                        offsetx - textWidth - 10,
+                        i * 100 + 45 + offsety
+                    );
+
+                    // bottom side, at angle 90 degrees
+                    ctx.save();
+                    ctx.translate(
+                        i * 100 + 45 + offsetx,
+                        100 * (len - 1) + 10 + offsety + textWidth
+                    );
+                    ctx.rotate(-Math.PI / 2);
+                    ctx.fillText(text, 0, 0);
+                    ctx.restore();
+                }
+
+                // draw the key
+                // vertical gradient
+                grad1 = ctx.createLinearGradient(
+                    canvas.width - 100,
+                    50,
+                    canvas.width - 100,
+                    100 * (len - 1) + 50
+                );
+
+                grad1.addColorStop(1, "#" + colors[0]);
+                grad1.addColorStop(0.5, "#" + colors[1]);
+                grad1.addColorStop(0, "#" + colors[2]);
+
+                ctx.fillStyle = grad1;
+
+                ctx.rect(canvas.width - 350, 50, 150, 100 * (len - 1));
+
+                ctx.fill();
+
+                // write the numbers on the right side
+                ctx.fillStyle = "#000000";
+                ctx.font = "40px Helvetica";
+
+                nums = [1, 0.5, 0, -0.5, -1];
+                if (ingredients.length > 10)
+                    nums = [1, 0.75, 0.5, 0.25, 0, -0.25, -0.5, -0.75, -1];
+
+                t = 100;
+                b = 100 * (len - 1) + 50;
+
+                for (i = 0; i < nums.length; i++) {
+                    text = nums[i];
+                    textWidth = ctx.measureText(text).width;
+
+                    ctx.fillText(
+                        "― " + text,
+                        canvas.width - 180,
+                        100 + (b - t) * (i / (nums.length - 1))
+                    );
+                }
+
+                // add the canvas to the page
+                document.getElementById("image-container").appendChild(canvas);
+            }
+        </script>
+        <script>
+            ingredientList = [];
+
+            function addIngredient() {
+                // add the ingredient to the list
+                var list = document.getElementById("list");
+                var entry = document.createElement("div");
+                entry.className = "entry";
+                entry.innerHTML =
+                    document.getElementById("ingredientEnter").value;
+                list.appendChild(entry);
+
+                // add remove functionality on click
+                entry.onclick = function () {
+                    removeItem(this);
+                };
+
+                // add the ingredient to the ingredients list
+                ingredientList.push(
+                    document.getElementById("ingredientEnter").value
+                );
+
+                // remove the ingredient from the input
+                document.getElementById("ingredientEnter").value = "";
+            }
+
+            function handleKeyDown(event) {
+                if (event.keyCode === 13) {
+                    addIngredient();
+                    event.preventDefault();
+                }
+            }
+
+            function removeItem(item) {
+                // remove the ingredient from the list
+                var list = document.getElementById("list");
+                list.removeChild(item);
+
+                // remove the ingredient from the ingredients list
+                ingredientList.splice(
+                    ingredientList.indexOf(item.innerHTML),
+                    1
+                );
+            }
+
+            function presets(preset) {
+                for (i in preset) {
+                    document.getElementById("ingredientEnter").value =
+                        preset[i];
+                    addIngredient();
+                }
+            }
+
+            function reset() {
+                document.getElementById("list").innerHTML = "";
+                ingredientList = [];
+            }
+        </script>
+    </head>
+    <body>
+        <div id="content">
+            <h1>Correlations in the AllRecipes Database</h1>
+            <div id="exp">
+                <h2>Explanation</h2>
+                <p>
+                    This is a tool to visualize the correlations between
+                    ingredients in the AllRecipes database. I was inspired to
+                    make this by
+                    <a
+                        href="https://www.reddit.com/r/dataisbeautiful/comments/wuzidf/oc_correlation_between_spices_shared_in_recipes/"
+                        >this</a
+                    >
+                    Reddit post. It generates a correlation matrix between the
+                    selected ingredients and then displays it as a heatmap. The
+                    color of each cell represents the correlation factor between
+                    the two ingredients.
+                </p>
+                <h2>How it was made</h2>
+                <p>
+                    I first took the dataset from this
+                    <a
+                        href="https://archive.org/details/allrecipes.com_recipes_12042020000000"
+                        >internet archive</a
+                    >
+                    that contains about 71,000 recipes scraped from AllRecipes.
+                    And wrote a python script that parsed the dataset and loaded
+                    it into a json file that contains only the relevant
+                    information (recipe name, ingredients, category, rating).
+                    <br />
+                    Then I downloaded
+                    <a
+                        href="https://github.com/schollz/food-identicon/blob/master/ingredients.txt"
+                        >a text file</a
+                    >
+                    containing a list of bunch of ingredients. However that list
+                    contained a lot of junk items (like ingredients that
+                    contained measurements), so I make another python script
+                    that removed those items. <br />
+                    The recipes dataset's ingredients were written like "1 cup
+                    of flour", so I needed to just isolate the ingredient's
+                    name. I found a
+                    <a href="https://pypi.org/project/ingredient-parser-nlp/">
+                        python library</a
+                    >
+                    that could do that, but it wasn't perfect. So after running
+                    the ingredients through that, the python script looks
+                    through the list of ingredients, and the largest item from
+                    that list that is a substring of the ingredient, becomes the
+                    ingredient. After running this I had a list of recipes, and
+                    their ingredients.
+                    <br />
+                    To calculate the correlation matrix, I wrote a javascript
+                    function (so it could be hosted on a static website) that
+                    takes in a list of ingredients, and a category (if you want
+                    to only look at a certain category of recipes), and then
+                    calculates the correlation matrix. <br />
+                    Then I wrote a javascript function that takes in the
+                    correlation matrix, and generates an image that represents
+                    it. <br />
+                    Finally I wrote this webpage to display the image, and allow
+                    the user to select the ingredients they want to analyze.
+                </p>
+                <h2>Limitations</h2>
+                <p>
+                    The dataset is not perfect, and there are some issues I
+                    could see with it. The primary issue is that the data is
+                    fairly western focused, so the correlations will reflect
+                    that.
+                </p>
+            </div>
+            <div id="controls">
+                <h3>Ingredients List</h3>
+
+                <!-- text form that only allows items in the ingredients_list list to be entered, and displayes the options as the user is typing -->
+                <input
+                    type="text"
+                    id="ingredientEnter"
+                    list="ingredients_list"
+                    onkeydown="handleKeyDown(event)" />
+                <datalist id="ingredients_list">
+                    <script>
+                        for (i of ingredients_list.sort()) {
+                            document.write(
+                                '<option value="' + i + '"></option>'
+                            );
+                        }
+                    </script>
+                </datalist>
+
+                <button onclick="addIngredient()">Add Ingredient</button>
+                <button onclick="presets(sample)">Spices</button>
+                <button onclick="presets(sample2)">20 Most Used</button>
+                <button onclick="presets(sample3)">Baking Items</button>
+                <button onclick="reset()">Reset</button>
+                <div id="list"></div>
+
+                <input
+                    type="text"
+                    value="Enter Category (Optional)"
+                    id="categoryIn"
+                    list="categories_list"
+                    onfocus="if (this.value == 'Enter Category (Optional)') this.value=''" />
+
+                <datalist id="categories_list">
+                    <script>
+                        for (i of categories.sort()) {
+                            document.write(
+                                '<option value="' + i + '"></option>'
+                            );
+                        }
+                    </script>
+                </datalist>
+
+                <!-- colors selector -->
+                <h3>Select colors</h3>
+                <input
+                    type="color"
+                    id="color1"
+                    value="#3277FF"
+                    onchange="colors[0] = this.value.substring(1)" />
+                <input
+                    type="color"
+                    id="color2"
+                    value="#FFFFFF"
+                    onchange="colors[1] = this.value.substring(1)" />
+
+                <input
+                    type="color"
+                    id="color3"
+                    value="#FF4131"
+                    onchange="colors[2] = this.value.substring(1)" />
+
+                <!-- switch to show numbers -->
+                <h3>Show Numbers</h3>
+                <input
+                    type="checkbox"
+                    id="showNumbers"
+                    onchange="showNumbers = this.checked"
+                    style="width: 10%; height: 10%" />
+                <br />
+
+                <!-- button to generate the analysis -->
+                <button
+                    onclick="analyze(ingredientList, showNumbers, document.getElementById('categoryIn').value)"
+                    style="width: 90%; height: 10%">
+                    Analyze
+                </button>
+            </div>
+            <div id="image-container"></div>
+        </div>
+    </body>
+</html>
